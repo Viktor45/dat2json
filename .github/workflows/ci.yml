@@ -49,9 +49,6 @@ jobs:
 
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v9
-        with:
-          # version: v1.58.0
-          args: run ./...
 
       - name: Run go vet
         run: go vet ./...

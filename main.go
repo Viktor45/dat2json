@@ -10,7 +10,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"time"
 
 	"dat2json/internal/geoip"
 	"dat2json/internal/geosite"
@@ -81,39 +80,23 @@ func parseList(listStr string, toUpper bool) []string {
 	return items
 }
 
-type progressReporter struct {
-	total      int
-	lastReport time.Time
-	mu         sync.Mutex
-}
+// sortMapByKeys sorts a map by keys and returns both keys and a new map with sorted entries.
+func sortMapByKeys(data map[string][]string, sortValues bool) ([]string, map[string][]string) {
+	keys := make([]string, 0, len(data))
+	for k := range data {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
 
-func newProgressReporter(total int) *progressReporter {
-	return &progressReporter{
-		total:      total,
-		lastReport: time.Now(),
+	sorted := make(map[string][]string)
+	for _, k := range keys {
+		vals := data[k]
+		if sortValues {
+			sort.Strings(vals)
+		}
+		sorted[k] = vals
 	}
-}
-
-func (p *progressReporter) maybeReport(current int) {
-	if p.total <= 10000 {
-		return
-	}
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	now := time.Now()
-	if now.Sub(p.lastReport) < 500*time.Millisecond {
-		return
-	}
-	fmt.Fprintf(os.Stderr, "\rProcessing... %d/%d (%.1f%%)", current, p.total, float64(current)/float64(p.total)*100)
-	p.lastReport = now
-}
-
-func (p *progressReporter) finish() {
-	if p.total > 10000 {
-		p.mu.Lock()
-		defer p.mu.Unlock()
-		fmt.Fprintln(os.Stderr, "\rProcessing... done.            ")
-	}
+	return keys, sorted
 }
 
 func writeFileSafe(path string, data []byte) error {
@@ -124,6 +107,55 @@ func writeFileSafe(path string, data []byte) error {
 		}
 	}
 	return os.WriteFile(path, data, 0o644)
+}
+
+// exportToDirectory writes each key-value pair to a separate file in the output directory.
+func exportToDirectory(outputDir, outFormat string, filtered map[string][]string) error {
+	if err := os.MkdirAll(outputDir, 0o755); err != nil {
+		return fmt.Errorf("create output directory: %w", err)
+	}
+
+	ext := "yaml"
+	if outFormat == "json" {
+		ext = "json"
+	}
+
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 32)
+	var mu sync.Mutex
+	var errs []error
+
+	for key, entries := range filtered {
+		wg.Add(1)
+		go func(k string, v []string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			single := map[string][]string{k: v}
+			data, err := format.Serialize(single, outFormat)
+			if err != nil {
+				mu.Lock()
+				errs = append(errs, fmt.Errorf("serialize %s: %w", k, err))
+				mu.Unlock()
+				return
+			}
+			filename := fmt.Sprintf("%s.%s", k, ext)
+			path := filepath.Join(outputDir, filename)
+			if err := writeFileSafe(path, data); err != nil {
+				mu.Lock()
+				errs = append(errs, fmt.Errorf("write %s: %w", path, err))
+				mu.Unlock()
+			}
+		}(key, entries)
+	}
+	wg.Wait()
+
+	if len(errs) > 0 {
+		return errs[0]
+	}
+	fmt.Printf("✅ Exported %d files to %s (%s)\n", len(filtered), outputDir, outFormat)
+	return nil
 }
 
 func main() {
@@ -199,7 +231,7 @@ func main() {
 		}
 	}
 
-	// === ОБРАБОТКА --list-tags ===
+	// Handle --list-tags flag: display all tags in the data.
 	if *listTags {
 		if !isGeoSite {
 			log.Fatal("--list-tags is only supported for geosite.dat (--site)")
@@ -217,7 +249,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	// === ПРИМЕНЕНИЕ ФИЛЬТРОВ ===
+	// Apply tag/country filters if provided, otherwise use all entries.
 	var filtered map[string][]string
 	warnings := []string{}
 
@@ -234,11 +266,7 @@ func main() {
 			}
 			for _, t := range tags {
 				if origTag, ok := lowerMap[t]; ok {
-					domains := fullResult[origTag]
-					if *sortKeys {
-						sort.Strings(domains)
-					}
-					filtered[origTag] = domains
+					filtered[origTag] = fullResult[origTag]
 				} else {
 					warnings = append(warnings, fmt.Sprintf("tag '%s' not found", t))
 				}
@@ -248,22 +276,9 @@ func main() {
 			}
 		} else {
 			filtered = fullResult
-			if *sortKeys {
-				keys := make([]string, 0, len(filtered))
-				for k := range filtered {
-					keys = append(keys, k)
-				}
-				sort.Strings(keys)
-				sorted := make(map[string][]string)
-				for _, k := range keys {
-					domains := filtered[k]
-					if *sortKeys {
-						sort.Strings(domains)
-					}
-					sorted[k] = domains
-				}
-				filtered = sorted
-			}
+		}
+		if *sortKeys {
+			_, filtered = sortMapByKeys(filtered, true)
 		}
 	} else {
 		if *tagFilter != "" {
@@ -286,59 +301,20 @@ func main() {
 			filtered = fullResult
 		}
 		if *sortKeys {
-			keys := make([]string, 0, len(filtered))
-			for k := range filtered {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			sorted := make(map[string][]string)
-			for _, k := range keys {
-				sorted[k] = filtered[k]
-			}
-			filtered = sorted
+			_, filtered = sortMapByKeys(filtered, false)
 		}
 	}
 
-	// === ВЫВОД ПРЕДУПРЕЖДЕНИЙ ===
+	// Output any collected warnings to stderr.
 	for _, w := range warnings {
 		fmt.Fprintf(os.Stderr, "⚠️ Warning: %s\n", w)
 	}
 
-	// === ЭКСПОРТ ===
+	// Export: write data to output file or directory.
 	if *outputDir != "" {
-		if err := os.MkdirAll(*outputDir, 0o755); err != nil {
-			log.Fatal("error creating output directory:", err)
+		if err := exportToDirectory(*outputDir, outFormat, filtered); err != nil {
+			log.Fatalf("error exporting to directory: %v", err)
 		}
-
-		ext := "yaml"
-		if outFormat == "json" {
-			ext = "json"
-		}
-
-		var wg sync.WaitGroup
-		sem := make(chan struct{}, 32)
-
-		for key, entries := range filtered {
-			wg.Add(1)
-			go func(k string, v []string) {
-				defer wg.Done()
-				sem <- struct{}{}
-				defer func() { <-sem }()
-
-				single := map[string][]string{k: v}
-				data, err := format.Serialize(single, outFormat)
-				if err != nil {
-					log.Fatalf("error serializing %s: %v", k, err)
-				}
-				filename := fmt.Sprintf("%s.%s", k, ext)
-				path := filepath.Join(*outputDir, filename)
-				if err := writeFileSafe(path, data); err != nil {
-					log.Fatalf("error writing %s: %v", path, err)
-				}
-			}(key, entries)
-		}
-		wg.Wait()
-		fmt.Printf("✅ Exported %d files to %s (%s)\n", len(filtered), *outputDir, outFormat)
 	} else if *outputFile != "" {
 		outBytes, err := format.Serialize(filtered, outFormat)
 		if err != nil {

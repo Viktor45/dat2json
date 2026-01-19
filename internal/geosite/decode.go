@@ -12,13 +12,34 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+const (
+	magicHeaderGeoSite = "GEOS"
+	magicHeaderSize    = 4
+)
+
 var ErrInvalidFormat = fmt.Errorf("not a valid geosite.dat file")
 
 func Decode(data []byte) (map[string][]string, error) {
-	if len(data) >= 4 && string(data[:4]) == "GEOS" {
+	if len(data) >= magicHeaderSize && string(data[:magicHeaderSize]) == magicHeaderGeoSite {
 		return decodeBinary(data)
 	}
 	return decodeProtobuf(data)
+}
+
+// domainTypePrefix returns the prefix string for a given domain type byte.
+func domainTypePrefix(domainType byte) string {
+	switch domainType {
+	case 0:
+		return "domain:"
+	case 1:
+		return "full:"
+	case 2:
+		return "regexp:"
+	case 3:
+		return "keyword:"
+	default:
+		return fmt.Sprintf("type%d:", domainType)
+	}
 }
 
 func decodeBinary(data []byte) (map[string][]string, error) {
@@ -51,26 +72,29 @@ func decodeBinary(data []byte) (map[string][]string, error) {
 				return nil, fmt.Errorf("read domain value: %w", err)
 			}
 
-			prefix := ""
-			switch domainType {
-			case 0:
-				prefix = "domain:"
-			case 1:
-				prefix = "full:"
-			case 2:
-				prefix = "regexp:"
-			case 3:
-				prefix = "keyword:"
-			default:
-				prefix = fmt.Sprintf("type%d:", domainType)
-			}
-			domains = append(domains, prefix+value)
+			domains = append(domains, domainTypePrefix(domainType)+value)
 		}
 
 		result[tagName] = domains
 	}
 
 	return result, nil
+}
+
+// protobufDomainTypePrefix returns the prefix for Protobuf router.Domain types.
+func protobufDomainTypePrefix(t router.Domain_Type) string {
+	switch t {
+	case router.Domain_Domain:
+		return "domain:"
+	case router.Domain_Full:
+		return "full:"
+	case router.Domain_Regex:
+		return "regexp:"
+	case router.Domain_Plain:
+		return "keyword:"
+	default:
+		return fmt.Sprintf("type%d:", t)
+	}
 }
 
 func decodeProtobuf(data []byte) (map[string][]string, error) {
@@ -83,20 +107,7 @@ func decodeProtobuf(data []byte) (map[string][]string, error) {
 	for _, site := range list.Entry {
 		var domains []string
 		for _, d := range site.Domain {
-			prefix := ""
-			switch d.GetType() {
-			case router.Domain_Domain:
-				prefix = "domain:"
-			case router.Domain_Full:
-				prefix = "full:"
-			case router.Domain_Regex:
-				prefix = "regexp:"
-			case router.Domain_Plain:
-				prefix = "keyword:"
-			default:
-				prefix = fmt.Sprintf("type%d:", d.GetType())
-			}
-			domains = append(domains, prefix+d.GetValue())
+			domains = append(domains, protobufDomainTypePrefix(d.GetType())+d.GetValue())
 		}
 		result[site.CountryCode] = domains
 	}
@@ -105,10 +116,8 @@ func decodeProtobuf(data []byte) (map[string][]string, error) {
 }
 
 func IsValid(data []byte) bool {
-	if len(data) >= 4 {
-		if string(data[:4]) == "GEOI" || string(data[:4]) == "GEOS" {
-			return true
-		}
+	if len(data) >= magicHeaderSize && string(data[:magicHeaderSize]) == magicHeaderGeoSite {
+		return true
 	}
 	_, err := decodeProtobuf(data)
 	return err == nil

@@ -13,10 +13,15 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+const (
+	magicHeaderGeoIP = "GEOI"
+	magicHeaderSize  = 4
+)
+
 var ErrInvalidFormat = fmt.Errorf("not a valid geoip.dat file")
 
 func Decode(data []byte) (map[string][]string, error) {
-	if len(data) >= 4 && string(data[:4]) == "GEOI" {
+	if len(data) >= magicHeaderSize && string(data[:magicHeaderSize]) == magicHeaderGeoIP {
 		return decodeBinary(data)
 	}
 	return decodeProtobuf(data)
@@ -91,10 +96,8 @@ func decodeProtobuf(data []byte) (map[string][]string, error) {
 }
 
 func IsValid(data []byte) bool {
-	if len(data) >= 4 {
-		if string(data[:4]) == "GEOI" || string(data[:4]) == "GEOS" {
-			return true
-		}
+	if len(data) >= magicHeaderSize && string(data[:magicHeaderSize]) == magicHeaderGeoIP {
+		return true
 	}
 	_, err := decodeProtobuf(data)
 	return err == nil

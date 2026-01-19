@@ -13,10 +13,10 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// resetFlags сбрасывает все флаги в исходное состояние
+// resetFlags clears all flag state to ensure clean test isolation.
 func resetFlags() {
 	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-	// Пересоздаём флаги
+	// Recreate all flags with their default values.
 	inputFile = flag.String("i", "", "")
 	outputFile = flag.String("o", "", "")
 	outputDir = flag.String("output-dir", "", "")

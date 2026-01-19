@@ -1,3 +1,4 @@
+// Package geodata provides utilities for decoding binary geolocation data formats.
 // internal/geodata/varint.go
 package geodata
 

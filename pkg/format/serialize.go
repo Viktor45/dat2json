@@ -1,4 +1,4 @@
-// pkg/format/serialize.go
+// Package format provides serialization utilities for converting data to JSON or YAML formats.
 package format
 
 import (
@@ -9,6 +9,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// Serialize converts a map of strings to JSON or YAML bytes based on the specified format.
 func Serialize(data map[string][]string, format string) ([]byte, error) {
 	switch format {
 	case "json":

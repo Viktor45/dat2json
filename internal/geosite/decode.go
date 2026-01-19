@@ -1,4 +1,4 @@
-// internal/geosite/decode.go
+// Package geosite provides decoding functionality for geosite.dat files in binary or Protobuf format.
 package geosite
 
 import (
@@ -17,8 +17,10 @@ const (
 	magicHeaderSize    = 4
 )
 
+// ErrInvalidFormat is returned when the data does not represent a valid geosite.dat file.
 var ErrInvalidFormat = fmt.Errorf("not a valid geosite.dat file")
 
+// Decode decodes binary or Protobuf geosite data into a map of tags to domain lists.
 func Decode(data []byte) (map[string][]string, error) {
 	if len(data) >= magicHeaderSize && string(data[:magicHeaderSize]) == magicHeaderGeoSite {
 		return decodeBinary(data)
@@ -115,6 +117,7 @@ func decodeProtobuf(data []byte) (map[string][]string, error) {
 	return result, nil
 }
 
+// IsValid checks if the data is a valid geosite.dat file (binary or Protobuf format).
 func IsValid(data []byte) bool {
 	if len(data) >= magicHeaderSize && string(data[:magicHeaderSize]) == magicHeaderGeoSite {
 		return true

@@ -36,11 +36,13 @@ func TestIntegrationGeoIPBinary(t *testing.T) {
 	outputFile := filepath.Join(t.TempDir(), "output.json")
 
 	data := []byte("GEOI\x01\x02US\x01\x01\x02\x03\x04\x18")
-	os.WriteFile(inputFile, data, 0o644)
+	if err := os.WriteFile(inputFile, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	os.Args = []string{"dat2json", "-i", inputFile, "--ip", "-o", outputFile}
 
-	defer func() { recover() }()
+	defer func() { _ = recover() }()
 
 	func() {
 		defer func() {
@@ -76,12 +78,13 @@ func TestIntegrationGeoSiteProtobuf(t *testing.T) {
 		},
 	}
 	data, _ := proto.Marshal(geositeList)
-	os.WriteFile(inputFile, data, 0o644)
+	if err := os.WriteFile(inputFile, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
 
-	// Только --site
-	os.Args = []string{"dat2json", "-i", inputFile, "--site", "-o", outputFile} // ← ИСПРАВЛЕНО
+	os.Args = []string{"dat2json", "-i", inputFile, "--site", "-o", outputFile}
 
-	defer func() { recover() }()
+	defer func() { _ = recover() }()
 
 	func() {
 		defer func() {

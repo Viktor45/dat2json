@@ -1,4 +1,4 @@
-// internal/geoip/decode.go
+// Package geoip provides decoding functionality for geoip.dat files in binary or Protobuf format.
 package geoip
 
 import (
@@ -18,8 +18,10 @@ const (
 	magicHeaderSize  = 4
 )
 
+// ErrInvalidFormat is returned when the data does not represent a valid geoip.dat file.
 var ErrInvalidFormat = fmt.Errorf("not a valid geoip.dat file")
 
+// Decode decodes binary or Protobuf geoip data into a map of country codes to CIDR lists.
 func Decode(data []byte) (map[string][]string, error) {
 	if len(data) >= magicHeaderSize && string(data[:magicHeaderSize]) == magicHeaderGeoIP {
 		return decodeBinary(data)
@@ -95,6 +97,7 @@ func decodeProtobuf(data []byte) (map[string][]string, error) {
 	return result, nil
 }
 
+// IsValid checks if the data is a valid geoip.dat file (binary or Protobuf format).
 func IsValid(data []byte) bool {
 	if len(data) >= magicHeaderSize && string(data[:magicHeaderSize]) == magicHeaderGeoIP {
 		return true

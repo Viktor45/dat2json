@@ -1,0 +1,14 @@
+version: 2
+project_name: dat2json
+
+before:
+  hooks:
+    - go mod tidy
+    - sh -c 'git rev-parse --short HEAD > COMMIT'
+
+builds:
+  - env: [CGO_ENABLED=0]
+    targets: [go_first_class]
+
+checksum:
+  name_template: "checksums.txt"

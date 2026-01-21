@@ -1,24 +1,12 @@
 version: "2"
+
 linters:
   enable:
-    - bodyclose
-    - revive
-  exclusions:
-    generated: lax
-    rules:
-      - path: (.+)\.go$
-        text: error return value not checked.*Close
-    paths:
-      - third_party$
-      - builtin$
-      - examples$
-formatters:
-  enable:
-    - gofmt
-    - goimports
-  exclusions:
-    generated: lax
-    paths:
-      - third_party$
-      - builtin$
-      - examples$
+    # Core linters for critical issues
+    - bodyclose # Ensures HTTP response bodies are closed
+    - errcheck # Detects unchecked error returns
+    - govet # Examines Go source code and reports suspicious constructs
+    - revive # Community-maintained replacement for golint
+    - ineffassign # Detects ineffectual assignments
+    - unconvert # Removes unnecessary type conversions
+    - unused # Finds unused constants, variables, functions, types

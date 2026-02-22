@@ -33,3 +33,4 @@ go.work.sum
 lint.txt
 .DS_Store
 dat2json
+.vscode/settings.json

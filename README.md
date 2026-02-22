@@ -85,7 +85,7 @@ go build -o dat2json .
 # Convert geoip.dat to JSON (explicit --ip required)
 ./dat2json -i geoip.dat --ip -o countries.json
 
-# Export only US and CN to YAML
+# Export only NL and RU to YAML
 ./dat2json -i geoip.dat --ip -o eu.yaml --country=NL,RU
 
 # List all tags in geosite.dat

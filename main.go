@@ -25,6 +25,7 @@ var (
 	tagFilter     = flag.String("tag", "", "Comma-separated tags (geosite only)")
 	countryFilter = flag.String("country", "", "Comma-separated country codes (geoip only)")
 	listTags      = flag.Bool("list-tags", false, "List all tags in geosite.dat and exit")
+	validateMode  = flag.Bool("validate", false, "Validate .dat structure without writing output")
 	sortKeys      = flag.Bool("sort", false, "Sort keys")
 	formatFlag    = flag.String("format", "", "Output format: json or yaml")
 	ipMode        = flag.Bool("ip", false, "Treat input as geoip.dat")
@@ -172,6 +173,14 @@ func validateFlags() error {
 	if *listTags && !*siteMode {
 		return fmt.Errorf("--list-tags is only supported for geosite.dat (use --site)")
 	}
+	if *validateMode {
+		if *outputFile != "" || *outputDir != "" {
+			return fmt.Errorf("--validate cannot be used with -o or --output-dir")
+		}
+		if *listTags {
+			return fmt.Errorf("--validate cannot be used with --list-tags")
+		}
+	}
 	return nil
 }
 
@@ -251,49 +260,57 @@ func exportToDirectory(outputDir, outFormat string, filtered map[string][]string
 	return nil
 }
 
-func main() {
-	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s -i input.dat [options]\n", os.Args[0])
-		fmt.Fprintln(os.Stderr, "\nOptions:")
-		fmt.Fprintln(os.Stderr, "  -i FILE             Input .dat file (required)")
-		fmt.Fprintln(os.Stderr, "  --ip                Treat input as geoip.dat")
-		fmt.Fprintln(os.Stderr, "  --site              Treat input as geosite.dat")
-		fmt.Fprintln(os.Stderr, "  -o FILE             Output file (.json/.yaml/.yml)")
-		fmt.Fprintln(os.Stderr, "  --output-dir DIR    Output each tag/country to separate file")
-		fmt.Fprintln(os.Stderr, "  --format FMT        Output format: json or yaml")
-		fmt.Fprintln(os.Stderr, "  --tag LIST          Filter geosite by tags")
-		fmt.Fprintln(os.Stderr, "  --country LIST      Filter geoip by country codes")
-		fmt.Fprintln(os.Stderr, "  --list-tags         List all tags in geosite.dat and exit")
-		fmt.Fprintln(os.Stderr, "  --sort              Sort keys")
-		fmt.Fprintln(os.Stderr, "  -h                  Show this help")
-	}
+func usage() {
+	fmt.Fprintf(os.Stderr, "Usage: %s -i input.dat [options]\n", os.Args[0])
+	fmt.Fprintln(os.Stderr, "\nOptions:")
+	fmt.Fprintln(os.Stderr, "  -i FILE             Input .dat file (required)")
+	fmt.Fprintln(os.Stderr, "  --ip                Treat input as geoip.dat")
+	fmt.Fprintln(os.Stderr, "  --site              Treat input as geosite.dat")
+	fmt.Fprintln(os.Stderr, "  -o FILE             Output file (.json/.yaml/.yml)")
+	fmt.Fprintln(os.Stderr, "  --output-dir DIR    Output each tag/country to separate file")
+	fmt.Fprintln(os.Stderr, "  --format FMT        Output format: json or yaml")
+	fmt.Fprintln(os.Stderr, "  --tag LIST          Filter geosite by tags")
+	fmt.Fprintln(os.Stderr, "  --country LIST      Filter geoip by country codes")
+	fmt.Fprintln(os.Stderr, "  --list-tags         List all tags in geosite.dat and exit")
+	fmt.Fprintln(os.Stderr, "  --sort              Sort keys")
+	fmt.Fprintln(os.Stderr, "  --validate          Validate file structure without writing output")
+	fmt.Fprintln(os.Stderr, "  -h                  Show this help")
+}
+
+func run() int {
+	flag.Usage = usage
 	flag.Parse()
 
 	if *help {
-		flag.Usage()
-		os.Exit(0)
+		usage()
+		return 0
 	}
 
 	if err := validateFlags(); err != nil {
-		log.Fatal("error:", err)
+		log.Println("error:", err)
+		return 1
 	}
 
 	if err := validateInputFile(*inputFile); err != nil {
-		log.Fatal("error:", err)
+		log.Println("error:", err)
+		return 1
 	}
 
 	outFormat, err := getOutputFormat()
-	if err != nil && !*listTags {
-		log.Fatal("error:", err)
+	if err != nil && !*listTags && !*validateMode {
+		log.Println("error:", err)
+		return 1
 	}
 
 	data, err := os.ReadFile(*inputFile)
 	if err != nil {
-		log.Fatal("error reading input file:", err)
+		log.Println("error reading input file:", err)
+		return 1
 	}
 
 	if len(data) == 0 {
-		log.Fatal("error: input file is empty")
+		log.Println("error: input file is empty")
+		return 1
 	}
 
 	isGeoSite := *siteMode
@@ -303,19 +320,22 @@ func main() {
 	if *ipMode {
 		fullResult, decodeErr = geoip.Decode(data)
 		if decodeErr != nil {
-			log.Fatalf("error decoding as geoip.dat: %v", decodeErr)
+			log.Println("error decoding as geoip.dat:", decodeErr)
+			return 1
 		}
 	} else if *siteMode {
 		fullResult, decodeErr = geosite.Decode(data)
 		if decodeErr != nil {
-			log.Fatalf("error decoding as geosite.dat: %v", decodeErr)
+			log.Println("error decoding as geosite.dat:", decodeErr)
+			return 1
 		}
 	}
 
 	// Handle --list-tags flag: display all tags in the data.
 	if *listTags {
 		if !isGeoSite {
-			log.Fatal("--list-tags is only supported for geosite.dat (--site)")
+			log.Println("--list-tags is only supported for geosite.dat (--site)")
+			return 1
 		}
 		tags := make([]string, 0, len(fullResult))
 		for tag := range fullResult {
@@ -327,7 +347,13 @@ func main() {
 		for _, tag := range tags {
 			fmt.Println(tag)
 		}
-		os.Exit(0)
+		return 0
+	}
+
+	// Handle --validate flag: just validate structure, no output.
+	if *validateMode {
+		fmt.Println("✅ validation passed")
+		return 0
 	}
 
 	// Apply tag/country filters if provided, otherwise use all entries.
@@ -353,7 +379,8 @@ func main() {
 				}
 			}
 			if len(filtered) == 0 {
-				log.Fatal("error: no valid tags found")
+				log.Println("error: no valid tags found")
+				return 1
 			}
 		} else {
 			filtered = fullResult
@@ -376,7 +403,8 @@ func main() {
 				}
 			}
 			if len(filtered) == 0 {
-				log.Fatal("error: no valid country codes found")
+				log.Println("error: no valid country codes found")
+				return 1
 			}
 		} else {
 			filtered = fullResult
@@ -394,15 +422,18 @@ func main() {
 	// Export: write data to output file or directory.
 	if *outputDir != "" {
 		if err := exportToDirectory(*outputDir, outFormat, filtered); err != nil {
-			log.Fatalf("error exporting to directory: %v", err)
+			log.Println("error exporting to directory:", err)
+			return 1
 		}
 	} else if *outputFile != "" {
 		outBytes, err := format.Serialize(filtered, outFormat)
 		if err != nil {
-			log.Fatal("error serializing output:", err)
+			log.Println("error serializing output:", err)
+			return 1
 		}
 		if err := writeFileSafe(*outputFile, outBytes); err != nil {
-			log.Fatal("error writing output file:", err)
+			log.Println("error writing output file:", err)
+			return 1
 		}
 		desc := outFormat
 		if isGeoSite && *tagFilter != "" {
@@ -415,4 +446,9 @@ func main() {
 		}
 		fmt.Printf("✅ Successfully converted %s → %s (%s)\n", *inputFile, *outputFile, desc)
 	}
+	return 0
+}
+
+func main() {
+	os.Exit(run())
 }

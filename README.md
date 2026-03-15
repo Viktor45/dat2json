@@ -91,6 +91,9 @@ go build -o dat2json .
 # List all tags in geosite.dat
 ./dat2json -i geosite.dat --site --list-tags
 
+# Validate geosite.dat structure without writing output
+./dat2json -i geosite.dat --site --validate
+
 # Export Netflix and Google to separate YAML files
 ./dat2json -i geosite.dat --site --output-dir ./rules --tag=netflix,google
 ```
@@ -108,6 +111,7 @@ go build -o dat2json .
 | `--tag LIST`       | Comma-separated tags (e.g., `google,netflix`)             | ❌<br>(`--site` only)                          |
 | `--country LIST`   | Comma-separated ISO 3166-1 alpha-2 codes (e.g., `US,DE`)  | ❌<br>(`--ip` only)                            |
 | `--list-tags`      | Print all tags in `geosite.dat`/`geoip.dat` and exit      | ❌<br>(`--site` only)                          |
+| `--validate`       | Validate file structure without writing output            | ❌<br>(must be used with `--ip` or `--site`, cannot be combined with `-o`/`--output-dir`) |
 | `--sort`           | Sort keys alphabetically (countries/tags + domains/CIDRs) | ❌                                             |
 | `-h`               | Show help                                                 | ❌                                             |
 

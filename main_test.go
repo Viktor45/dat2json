@@ -23,6 +23,7 @@ func resetFlags() {
 	tagFilter = flag.String("tag", "", "")
 	countryFilter = flag.String("country", "", "")
 	listTags = flag.Bool("list-tags", false, "")
+	validateMode = flag.Bool("validate", false, "")
 	sortKeys = flag.Bool("sort", false, "")
 	formatFlag = flag.String("format", "", "")
 	ipMode = flag.Bool("ip", false, "")
@@ -41,17 +42,9 @@ func TestIntegrationGeoIPBinary(t *testing.T) {
 	}
 
 	os.Args = []string{"dat2json", "-i", inputFile, "--ip", "-o", outputFile}
-
-	defer func() { _ = recover() }()
-
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-				return
-			}
-		}()
-		main()
-	}()
+	if code := run(); code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
 
 	content, err := os.ReadFile(outputFile)
 	if err != nil {
@@ -83,17 +76,9 @@ func TestIntegrationGeoSiteProtobuf(t *testing.T) {
 	}
 
 	os.Args = []string{"dat2json", "-i", inputFile, "--site", "-o", outputFile}
-
-	defer func() { _ = recover() }()
-
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-				return
-			}
-		}()
-		main()
-	}()
+	if code := run(); code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
 
 	content, err := os.ReadFile(outputFile)
 	if err != nil {
@@ -101,5 +86,25 @@ func TestIntegrationGeoSiteProtobuf(t *testing.T) {
 	}
 	if !strings.Contains(string(content), "test:") {
 		t.Errorf("unexpected output: %s", string(content))
+	}
+}
+
+func TestValidateMode(t *testing.T) {
+	resetFlags()
+	inputFile := filepath.Join(t.TempDir(), "geoip.dat")
+	data := []byte("GEOI\x01\x02US\x01\x01\x02\x03\x04\x18")
+	if err := os.WriteFile(inputFile, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	os.Args = []string{"dat2json", "-i", inputFile, "--ip", "--validate"}
+	if code := run(); code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+
+	// Ensure no output file was produced as part of validation.
+	outputFile := filepath.Join(t.TempDir(), "should-not-exist.yaml")
+	if _, err := os.Stat(outputFile); !os.IsNotExist(err) {
+		t.Fatalf("expected output file to not exist, got: %v", err)
 	}
 }

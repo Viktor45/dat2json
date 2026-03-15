@@ -29,14 +29,27 @@ func Decode(data []byte) (map[string][]string, error) {
 	return decodeProtobuf(data)
 }
 
+const (
+	// Maximum entries to protect against malicious or corrupted input.
+	maxGeoIPEntries = 100_000
+	// Maximum CIDR entries per country.
+	maxCIDRsPerCountry = 50_000
+)
+
 func decodeBinary(data []byte) (map[string][]string, error) {
 	if len(data) < 5 {
 		return nil, ErrInvalidFormat
 	}
 	r := bytes.NewReader(data[5:])
 	result := make(map[string][]string)
+	entries := 0
 
 	for r.Len() > 0 {
+		if entries >= maxGeoIPEntries {
+			return nil, fmt.Errorf("too many entries")
+		}
+		entries++
+
 		countryCode, err := geodata.ReadVarintString(r)
 		if err != nil {
 			return nil, fmt.Errorf("read country code: %w", err)
@@ -45,6 +58,9 @@ func decodeBinary(data []byte) (map[string][]string, error) {
 		count, err := binary.ReadUvarint(r)
 		if err != nil {
 			return nil, fmt.Errorf("read CIDR count: %w", err)
+		}
+		if count > maxCIDRsPerCountry {
+			return nil, fmt.Errorf("CIDR count too large: %d", count)
 		}
 
 		var cidrs []string
@@ -84,8 +100,15 @@ func decodeProtobuf(data []byte) (map[string][]string, error) {
 		return nil, ErrInvalidFormat
 	}
 
+	if len(list.Entry) > maxGeoIPEntries {
+		return nil, fmt.Errorf("too many entries")
+	}
+
 	result := make(map[string][]string)
 	for _, geoip := range list.Entry {
+		if len(geoip.Cidr) > maxCIDRsPerCountry {
+			return nil, fmt.Errorf("CIDR count too large: %d", len(geoip.Cidr))
+		}
 		var cidrs []string
 		for _, cidr := range geoip.Cidr {
 			ipStr := net.IP(cidr.Ip).String()

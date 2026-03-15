@@ -16,6 +16,8 @@ import (
 	"dat2json/pkg/format"
 )
 
+const maxInputFileSize = 100 << 20 // 100 MiB
+
 var (
 	inputFile     = flag.String("i", "", "Input .dat file")
 	outputFile    = flag.String("o", "", "Output file (.json/.yaml/.yml)")
@@ -69,15 +71,57 @@ func parseList(listStr string, toUpper bool) []string {
 	items := make([]string, 0, len(parts))
 	for _, part := range parts {
 		trimmed := strings.TrimSpace(part)
-		if trimmed != "" {
-			if toUpper {
-				items = append(items, strings.ToUpper(trimmed))
-			} else {
-				items = append(items, strings.ToLower(trimmed))
-			}
+		if trimmed == "" {
+			continue
+		}
+		if toUpper {
+			items = append(items, strings.ToUpper(trimmed))
+		} else {
+			items = append(items, strings.ToLower(trimmed))
 		}
 	}
 	return items
+}
+
+// sanitizeFilename returns a filesystem-safe filename derived from the input.
+// It removes path separators and replaces unsupported characters with '_'.
+func sanitizeFilename(name string) string {
+	name = strings.TrimSpace(name)
+	name = strings.ReplaceAll(name, string(os.PathSeparator), "_")
+	name = strings.ReplaceAll(name, "/", "_")
+
+	var b strings.Builder
+	b.Grow(len(name))
+	for _, r := range name {
+		switch {
+		case r >= 'a' && r <= 'z':
+			b.WriteRune(r)
+		case r >= 'A' && r <= 'Z':
+			b.WriteRune(r)
+		case r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r == '.' || r == '_' || r == '-':
+			b.WriteRune(r)
+		default:
+			b.WriteRune('_')
+		}
+	}
+
+	out := strings.Trim(b.String(), ".")
+	if out == "" {
+		return "output"
+	}
+	return out
+}
+
+func isWithinBase(base, target string) bool {
+	cleanBase := filepath.Clean(base)
+	cleanTarget := filepath.Clean(target)
+	rel, err := filepath.Rel(cleanBase, cleanTarget)
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, fmt.Sprintf("..%c", filepath.Separator))
 }
 
 // sortMapByKeys sorts a map by keys and returns both keys and a new map with sorted entries.
@@ -109,6 +153,45 @@ func writeFileSafe(path string, data []byte) error {
 	return os.WriteFile(path, data, 0o644)
 }
 
+func validateFlags() error {
+	if *inputFile == "" {
+		return fmt.Errorf("-i input file is required")
+	}
+	if *outputFile != "" && *outputDir != "" {
+		return fmt.Errorf("cannot use both -o and --output-dir")
+	}
+	if !*listTags && *outputFile == "" && *outputDir == "" {
+		return fmt.Errorf("either -o, --output-dir, or --list-tags must be specified")
+	}
+	if *ipMode && *siteMode {
+		return fmt.Errorf("cannot use both --ip and --site")
+	}
+	if !*ipMode && !*siteMode {
+		return fmt.Errorf("must specify --ip or --site")
+	}
+	if *listTags && !*siteMode {
+		return fmt.Errorf("--list-tags is only supported for geosite.dat (use --site)")
+	}
+	return nil
+}
+
+func validateInputFile(path string) error {
+	st, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if st.IsDir() {
+		return fmt.Errorf("input path is a directory")
+	}
+	if st.Size() == 0 {
+		return fmt.Errorf("input file is empty")
+	}
+	if st.Size() > maxInputFileSize {
+		return fmt.Errorf("input file is too large (%d bytes, max %d bytes)", st.Size(), maxInputFileSize)
+	}
+	return nil
+}
+
 // exportToDirectory writes each key-value pair to a separate file in the output directory.
 func exportToDirectory(outputDir, outFormat string, filtered map[string][]string) error {
 	if err := os.MkdirAll(outputDir, 0o755); err != nil {
@@ -132,6 +215,17 @@ func exportToDirectory(outputDir, outFormat string, filtered map[string][]string
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
+			safeKey := sanitizeFilename(k)
+			filename := fmt.Sprintf("%s.%s", safeKey, ext)
+			path := filepath.Join(outputDir, filename)
+			path = filepath.Clean(path)
+			if !isWithinBase(outputDir, path) {
+				mu.Lock()
+				errs = append(errs, fmt.Errorf("invalid output path for key %q", k))
+				mu.Unlock()
+				return
+			}
+
 			single := map[string][]string{k: v}
 			data, err := format.Serialize(single, outFormat)
 			if err != nil {
@@ -140,8 +234,7 @@ func exportToDirectory(outputDir, outFormat string, filtered map[string][]string
 				mu.Unlock()
 				return
 			}
-			filename := fmt.Sprintf("%s.%s", k, ext)
-			path := filepath.Join(outputDir, filename)
+
 			if err := writeFileSafe(path, data); err != nil {
 				mu.Lock()
 				errs = append(errs, fmt.Errorf("write %s: %w", path, err))
@@ -181,24 +274,12 @@ func main() {
 		os.Exit(0)
 	}
 
-	if *inputFile == "" {
-		log.Fatal("error: -i input file is required")
+	if err := validateFlags(); err != nil {
+		log.Fatal("error:", err)
 	}
 
-	if *outputFile != "" && *outputDir != "" {
-		log.Fatal("error: cannot use both -o and --output-dir")
-	}
-
-	if !*listTags && *outputFile == "" && *outputDir == "" {
-		log.Fatal("error: either -o, --output-dir, or --list-tags must be specified")
-	}
-
-	if *ipMode && *siteMode {
-		log.Fatal("error: cannot use both --ip and --site")
-	}
-
-	if !*ipMode && !*siteMode {
-		log.Fatal("error: must specify --ip or --site")
+	if err := validateInputFile(*inputFile); err != nil {
+		log.Fatal("error:", err)
 	}
 
 	outFormat, err := getOutputFormat()

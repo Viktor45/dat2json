@@ -44,14 +44,27 @@ func domainTypePrefix(domainType byte) string {
 	}
 }
 
+const (
+	// Maximum entries to protect against malicious or corrupted input.
+	maxGeoSiteEntries = 100_000
+	// Maximum domains per tag.
+	maxDomainsPerTag = 50_000
+)
+
 func decodeBinary(data []byte) (map[string][]string, error) {
 	if len(data) < 5 {
 		return nil, ErrInvalidFormat
 	}
 	r := bytes.NewReader(data[5:])
 	result := make(map[string][]string)
+	entries := 0
 
 	for r.Len() > 0 {
+		if entries >= maxGeoSiteEntries {
+			return nil, fmt.Errorf("too many entries")
+		}
+		entries++
+
 		tagName, err := geodata.ReadVarintString(r)
 		if err != nil {
 			return nil, fmt.Errorf("read tag name: %w", err)
@@ -60,6 +73,9 @@ func decodeBinary(data []byte) (map[string][]string, error) {
 		count, err := binary.ReadUvarint(r)
 		if err != nil {
 			return nil, fmt.Errorf("read domain count: %w", err)
+		}
+		if count > maxDomainsPerTag {
+			return nil, fmt.Errorf("domain count too large: %d", count)
 		}
 
 		var domains []string
@@ -105,8 +121,15 @@ func decodeProtobuf(data []byte) (map[string][]string, error) {
 		return nil, ErrInvalidFormat
 	}
 
+	if len(list.Entry) > maxGeoSiteEntries {
+		return nil, fmt.Errorf("too many entries")
+	}
+
 	result := make(map[string][]string)
 	for _, site := range list.Entry {
+		if len(site.Domain) > maxDomainsPerTag {
+			return nil, fmt.Errorf("domain count too large: %d", len(site.Domain))
+		}
 		var domains []string
 		for _, d := range site.Domain {
 			domains = append(domains, protobufDomainTypePrefix(d.GetType())+d.GetValue())

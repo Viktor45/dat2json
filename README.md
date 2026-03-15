@@ -100,20 +100,20 @@ go build -o dat2json .
 
 ### Full Flag Reference
 
-| Flag               | Description                                               | Required                                      |
-| ------------------ | --------------------------------------------------------- | --------------------------------------------- |
-| `-i FILE`          | Input `.dat` file                                         | ✅ Yes                                         |
-| `--ip`             | Treat input as `geoip.dat` (IP → CIDR)                    | ✅ **One of `--ip` or `--site`**               |
-| `--site`           | Treat input as `geosite.dat` (domains → rules)            | ✅ **One of `--ip` or `--site`**               |
-| `-o FILE`          | Output file (`.json`, `.yaml`, or `.yml`)                 | ❌<br>(unless `--output-dir` or `--list-tags`) |
-| `--output-dir DIR` | Export each tag/country to `DIR/{name}.{ext}`             | ❌                                             |
-| `--format FMT`     | Force output format: `json` or `yaml`                     | ❌                                             |
-| `--tag LIST`       | Comma-separated tags (e.g., `google,netflix`)             | ❌<br>(`--site` only)                          |
-| `--country LIST`   | Comma-separated ISO 3166-1 alpha-2 codes (e.g., `US,DE`)  | ❌<br>(`--ip` only)                            |
-| `--list-tags`      | Print all tags in `geosite.dat`/`geoip.dat` and exit      | ❌<br>(`--site` only)                          |
+| Flag               | Description                                               | Required                                                                                 |
+| ------------------ | --------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `-i FILE`          | Input `.dat` file                                         | ✅ Yes                                                                                    |
+| `--ip`             | Treat input as `geoip.dat` (IP → CIDR)                    | ✅ **One of `--ip` or `--site`**                                                          |
+| `--site`           | Treat input as `geosite.dat` (domains → rules)            | ✅ **One of `--ip` or `--site`**                                                          |
+| `-o FILE`          | Output file (`.json`, `.yaml`, or `.yml`)                 | ❌<br>(unless `--output-dir` or `--list-tags`)                                            |
+| `--output-dir DIR` | Export each tag/country to `DIR/{name}.{ext}`             | ❌                                                                                        |
+| `--format FMT`     | Force output format: `json` or `yaml`                     | ❌                                                                                        |
+| `--tag LIST`       | Comma-separated tags (e.g., `google,netflix`)             | ❌<br>(`--site` only)                                                                     |
+| `--country LIST`   | Comma-separated ISO 3166-1 alpha-2 codes (e.g., `US,DE`)  | ❌<br>(`--ip` only)                                                                       |
+| `--list-tags`      | Print all tags in `geosite.dat`/`geoip.dat` and exit      | ❌<br>(`--site` only)                                                                     |
 | `--validate`       | Validate file structure without writing output            | ❌<br>(must be used with `--ip` or `--site`, cannot be combined with `-o`/`--output-dir`) |
-| `--sort`           | Sort keys alphabetically (countries/tags + domains/CIDRs) | ❌                                             |
-| `-h`               | Show help                                                 | ❌                                             |
+| `--sort`           | Sort keys alphabetically (countries/tags + domains/CIDRs) | ❌                                                                                        |
+| `-h`               | Show help                                                 | ❌                                                                                        |
 
 > ⚠️ **Notes**:
 > - Use **either** `-o` **or** `--output-dir` — not both.

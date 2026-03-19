@@ -1,0 +1,71 @@
+# Security and code quality verification with scheduled dependency audits
+name: Security & Code Quality
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly security audit (Tuesdays at 00:00 UTC) for vulnerability detection
+    - cron: "0 0 * * 2"
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  # Vulnerability scanning for Go module dependencies
+  security:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: ./go.mod
+          cache: true
+
+      # Verify go.mod/go.sum integrity and detect known vulnerabilities
+      - name: Run go mod tidy check
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum
+
+      # Nancy OSS vulnerability scanner for dependency analysis
+      - name: Run Nancy vulnerability scan
+        uses: sonatype-nexus-community/nancy-github-action@main
+        continue-on-error: true
+
+  # Cyclomatic complexity and code maintainability analysis
+  code-analysis:
+    name: Code Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: ./go.mod
+          cache: true
+
+      # Cyclomatic complexity measurement for code maintainability assessment
+      - name: Install gocyclo
+        run: go install github.com/fzipp/gocyclo/cmd/gocyclo@latest
+
+      - name: Run gocyclo
+        run: gocyclo -over 15 ./...
+        continue-on-error: true
+
+      # Error handling pattern validation
+      - name: Install goerr113
+        run: go install github.com/polyfloyd/go-errorlint@latest
+
+      - name: Check for error handling issues
+        run: go-errorlint ./...
+        continue-on-error: true

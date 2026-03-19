@@ -1,15 +1,29 @@
-# To get started with Dependabot version updates, you'll need to specify which
-# package ecosystems to update and where the package manifests are located.
-# Please see the documentation for all configuration options:
-# https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+# Dependabot configuration for automated dependency version updates
+# Reference: https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
 
 version: 2
 updates:
-  - package-ecosystem: "gomod" # See documentation for possible values
-    directory: "/" # Location of package manifests
+  # Go module dependency updates (project direct dependencies)
+  - package-ecosystem: "gomod"
+    directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday" # Update checks on Mondays
+      time: "03:00" # At 03:00 UTC
+    open-pull-requests-limit: 10
+    allow:
+      - dependency-type: "all"
+    # Conventional commit prefix for automated dependency PRs
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+
+  # GitHub Actions workflow versioning (separate from module deps)
   - package-ecosystem: "github-actions"
-    directory: "/" # workflow files
+    directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
+      time: "04:00" # Staggered one hour after module updates
+    open-pull-requests-limit: 5
+    # Actions use major version pinning for stability (conservative approach)

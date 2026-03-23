@@ -101,7 +101,7 @@ go build -o dat2json .
 ### Full Flag Reference
 
 | Flag               | Description                                               | Required                                                                                 |
-| ------------------ | --------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+|--------------------|-----------------------------------------------------------|------------------------------------------------------------------------------------------|
 | `-i FILE`          | Input `.dat` file                                         | ✅ Yes                                                                                    |
 | `--ip`             | Treat input as `geoip.dat` (IP → CIDR)                    | ✅ **One of `--ip` or `--site`**                                                          |
 | `--site`           | Treat input as `geosite.dat` (domains → rules)            | ✅ **One of `--ip` or `--site`**                                                          |
@@ -158,7 +158,7 @@ go build -o dat2json .
 ### 4. Work with Protobuf Files (Mihomo Runtime)
 
 ```bash
-# Mihomo's internal protobuf files have no header — use explicit mode
+# Mihomo internal protobuf files have no header — use explicit mode
 ./dat2json -i mihomo-geoip.pb --ip -o countries.json
 ./dat2json -i mihomo-geosite.pb --site --output-dir ./rules
 ```
@@ -170,7 +170,7 @@ go build -o dat2json .
 ### File Format Support
 
 | File          | Signature         | Content                                          |
-| ------------- | ----------------- | ------------------------------------------------ |
+|---------------|-------------------|--------------------------------------------------|
 | `geoip.dat`   | `GEOI` (optional) | `{ "US": ["1.2.3.0/24", ...], ... }`             |
 | `geosite.dat` | `GEOS` (optional) | `{ "google": ["domain:.google.com", ...], ... }` |
 

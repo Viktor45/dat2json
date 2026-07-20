@@ -21,7 +21,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version-file: ./go.mod
           cache: true
@@ -57,7 +57,7 @@ jobs:
       # Go module caching for faster dependency resolution
       # Cache key based on go.sum for automatic invalidation on dependency changes
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version-file: ./go.mod
           cache: true
